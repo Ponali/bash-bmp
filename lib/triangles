@@ -1,0 +1,230 @@
+#!/usr/bin/env bash
+
+tf=$(type -t set_pixel 2>/dev/null || rt=$?)
+if [[ "$tf" != "function" ]]; then
+    . ./lib/buffer || exit
+fi
+
+min() {
+    local a=$1
+    local b=$2
+
+    echo "$((a < b ? a : b))"
+}
+
+max() {
+    local a=$1
+    local b=$2
+
+    echo "$((a > b ? a : b))"
+}
+
+min3() {
+    min $(min "$1" "$2") "$3"
+}
+
+max3() {
+    max $(max "$1" "$2") "$3"
+}
+
+sign() {
+    local x1=$1
+    local y1=$2
+    local x2=$3
+    local y2=$4
+    local x3=$5
+    local y3=$6
+
+    echo $(((x1-x3)*(y2-y3)-(x2-x3)*(y1-y3)))
+}
+
+point_in_triangle() {
+    local px=$1
+    local py=$2
+    local x1=$3
+    local x2=$4
+    local x3=$5
+    local y1=$6
+    local y2=$7
+    local y3=$8
+
+    local d1=$(sign $px $py $x1 $y1 $x2 $y2)
+    local d2=$(sign $px $py $x2 $y2 $x3 $y3)
+    local d3=$(sign $px $py $x3 $y3 $x1 $y1)
+
+    local has_neg=0
+    local has_pos=0
+    if [ $d1 -lt 0 ] || [ $d2 -lt 0 ] || [ $d3 -lt 0 ]; then
+        has_neg=1
+    fi
+    if [ $d1 -gt 0 ] || [ $d2 -gt 0 ] || [ $d3 -gt 0 ]; then
+        has_pos=1
+    fi
+
+    if [ $has_neg -eq 1 ] && [ $has_pos -eq 1 ]; then
+        echo 1
+    else
+        echo 0
+    fi
+}
+
+ barycentric_coords() {
+    local px=$1
+    local py=$2
+    local x1=$3
+    local x2=$4
+    local x3=$5
+    local y1=$6
+    local y2=$7
+    local y3=$8
+    local unit=$9
+
+    local denom=$(((y2-y3)*(x1-x3)+(x3-x2)*(y1-y3)))
+
+    if [ $denom -eq 0 ]; then
+        echo 0 0 0
+        return
+    fi
+
+    local w1=$(((y2-y3)*(px-x3)+(x3-x2)*(py-y3)))
+    local w2=$(((y3-y1)*(px-x3)+(x1-x3)*(py-y3)))
+
+    local w3=$((denom-w1-w2))
+
+    ((w1=w1*unit/denom))
+    ((w2=w2*unit/denom))
+    ((w3=w3*unit/denom))
+
+    echo $w1 $w2 $w3
+}
+
+get_triangle_z() {
+    local d1=$1
+    local d2=$2
+    local d3=$3
+    local z1=$4
+    local z2=$5
+    local z3=$6
+    local unit=65535
+
+    echo $(( ((z1*d1)+(z2*d2)+(z3*d3))/unit ))
+}
+
+draw_triangle() {
+    local i=$1
+
+    # Get triangle properties
+    local tri_idx=$((i*3))
+    local tri_idx_end=$((i*3+3))
+    local tri_x_data=("${triangle_x[@]:tri_idx:tri_idx_end}")
+    local tri_y_data=("${triangle_y[@]:tri_idx:tri_idx_end}")
+    local tri_z_data=("${triangle_z[@]:tri_idx:tri_idx_end}")
+    local tri_c1=("${triangle_color1[@]:tri_idx:tri_idx_end}")
+    local tri_c2=("${triangle_color2[@]:tri_idx:tri_idx_end}")
+    local tri_c3=("${triangle_color3[@]:tri_idx:tri_idx_end}")
+
+    blend_color() {
+        local d1=$1
+        local d2=$2
+        local d3=$3
+        local unit=65535
+
+        o=()
+        for ((i = 0; i < 3; i++)); do
+            local a=${tri_c1[$i]}
+            local b=${tri_c2[$i]}
+            local c=${tri_c3[$i]}
+            local d=$(( (a*d1+b*d2+c*d3)/unit ))
+            o+=($d)
+        done
+
+        echo "${o[@]}"
+    }
+
+    # Project positions
+    local tri_x_proj=()
+    local tri_y_proj=()
+    if [ $use_zbuffer -eq 1 ]; then
+        for ((i = 0; i < 3; i++)); do
+            local dx=${tri_x_data[$i]}
+            local dy=${tri_y_data[$i]}
+            local dz=${tri_z_data[$i]}
+            if [ $dz -le 0 ]; then return; fi
+            local px=0
+            local py=0
+            ((px=dx*triangle_unit/dz))
+            ((py=dy*triangle_unit/dz))
+            tri_x_proj+=($px)
+            tri_y_proj+=($py)
+        done
+    else
+        tri_y_proj=(${tri_y_data[@]})
+        tri_x_proj=(${tri_x_data[@]})
+    fi
+
+    # Convert the fixed point positions into screen positions
+    local tri_x=()
+    local tri_y=()
+    for ((i = 0; i < 3; i++)); do
+        local px=${tri_x_proj[$i]}
+        local py=${tri_y_proj[$i]}
+        local cx=0
+        local cy=0
+        ((cx=(px+triangle_unit)*buffer_width/triangle_unit/2))
+        ((cy=(py+triangle_unit)*buffer_height/triangle_unit/2))
+        tri_x+=($cx)
+        tri_y+=($cy)
+    done
+
+    debug "converted X $(echo "${tri_x_data[@]}") -> $(echo "${tri_x[@]}")"
+    debug "converted Y $(echo "${tri_y_data[@]}") -> $(echo "${tri_y[@]}")"
+
+    # Calculate bounding box where the triangle resides.
+    local bbx1=$(max 0 $(min3 ${tri_x[@]}))
+    local bby1=$(max 0 $(min3 ${tri_y[@]}))
+    local bbx2=$(min $((buffer_width-1)) $(max3 ${tri_x[@]}))
+    local bby2=$(min $((buffer_height-1)) $(max3 ${tri_y[@]}))
+    debug "bounding box: $bbx1,$bby1 $bbx2,$bby2"
+
+    local coords
+    local z=0
+    if [ $triangle_fast_depth -eq 1 ]; then
+        z=$(get_triangle_z $((65535/3)) $((65535/3)) $((65535/3)) "${tri_z_data[@]}")
+        debug "average Z position: $z"
+    fi
+    echo >&2
+    for ((y = bby1; y <= bby2; y++)); do
+        local pxcount=0
+        for ((x = bbx1; x <= bbx2; x++)); do
+            if [ $(point_in_triangle $x $y "${tri_x[@]}" "${tri_y[@]}") -ne 1 ]; then
+                if [ $use_zbuffer -eq 1 ] && [ $triangle_fast_depth -eq 0 ]; then
+                    coords=($(barycentric_coords $x $y "${tri_x[@]}" "${tri_y[@]}" 65535))
+                    z=$(get_triangle_z "${coords[@]}" "${tri_z_data[@]}")
+                fi
+
+                local col=(${tri_c1[@]})
+                if [ $triangle_fast_depth -ne 1 ]; then
+                    if [ $triangle_debug_rgb -eq 1 ]; then
+                        col=($((${coords[0]}/256)) $((${coords[1]}/256)) $((${coords[2]}/256)))
+                    elif [ $triangle_debug_zbuf -eq 1 ]; then
+                        local showZ=$((z/1024))
+                        col=($showZ $showZ $showZ)
+                    else
+                        col=($(blend_color "${coords[@]}"))
+                    fi
+                fi
+                set_pixel $x $y $z "${col[@]}"
+                ((pxcount++))
+            fi
+        done
+        echo -ne "\e[F\e[J" >&2
+        debug "handled triangle row $y/$bby2 ($pxcount/$((bbx2-bbx1)) px)"
+    done
+}
+
+draw_triangles() {
+    for ((i = 0; i < triangle_count; i++)); do
+        debug "handling triangle $((i+1))/$triangle_count"
+        draw_triangle $i
+    done
+}

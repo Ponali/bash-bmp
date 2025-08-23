@@ -20,9 +20,16 @@ Color Gradient
 
 ![gradient](https://files.daveeddy.com/ysap/bmp/gradient.png)
 
+Sprite to BMP (smile)
+
     cat smile.txt | ./sprite-to-bmp -p palette.txt -o out.bmp
 
 ![smile](https://files.daveeddy.com/ysap/bmp/smile.png)
+
+Triangle drawer
+
+    ./triangle-drawer -w 64 -h 64 -o out.bmp
+
 
 License
 -------

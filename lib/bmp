@@ -51,9 +51,9 @@ bmp-rgb() {
 	local out
 
 	printf -v out '\\x%02x' \
-	    "$b" \
-	    "$g" \
-	    "$r"
+	    "$((b&255))" \
+	    "$((g&255))" \
+	    "$((r&255))"
 	printf '%b' "$out"
 }
 

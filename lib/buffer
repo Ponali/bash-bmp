@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+
+tf=$(type -t bmp-header 2>/dev/null || rt=$?)
+if [[ "$tf" != "function" ]]; then
+    . ./lib/bmp || exit
+fi
+
+zbuffer=()
+buffer_r=()
+buffer_g=()
+buffer_b=()
+buffer_width=0
+buffer_height=0
+use_zbuffer=0
+
+init_buffer() {
+    local width=$1
+	local height=$2
+
+	debug "init buffer ${width}x$height"
+
+    for ((i = 0; i < width*height; i++)); do
+        buffer_r+=($background_r)
+        buffer_g+=($background_g)
+        buffer_b+=($background_b)
+    done
+    buffer_width=$width
+    buffer_height=$height
+}
+
+init_zbuffer() {
+    debug "init zbuffer"
+
+    for ((i = 0; i < width*height; i++)); do
+        zbuffer+=(-1)
+    done
+    use_zbuffer=1
+}
+
+get_zbuffer() {
+    local x=$1
+    local y=$2
+
+    local idx=$((x+y*buffer_width))
+    echo "${zbuffer[$idx]}"
+}
+
+set_pixel() {
+    local x=$1
+    local y=$2
+    local z=$3
+    local r=$4
+    local g=$5
+    local b=$6
+
+    if [ $x -lt 0 ] || [ $x -ge $buffer_width ] || [ $y -lt 0 ] || [ $y -ge $buffer_height ]; then
+        return
+    fi
+
+    local idx=$((x+y*buffer_width))
+    if [ $use_zbuffer -eq 1 ]; then
+        if [ ${zbuffer[$idx]} -eq -1 ] || ([ "${zbuffer[$idx]}" != "" ] && [ "${zbuffer[$idx]}" -ge $z ]); then
+            zbuffer[$idx]=$z
+        else
+            return
+        fi
+    fi
+
+    buffer_r[$idx]=$r
+    buffer_g[$idx]=$g
+    buffer_b[$idx]=$b
+}
+
+export_buffer() {
+    bmp-header "$width" "$height"
+	local padding=$REPLY
+
+	local r g b y x idx
+	for ((y = 0; y < height; y++)); do
+		for ((x = 0; x < width; x++)); do
+			((idx=x+(height-y-1)*width))
+			r=${buffer_r[$idx]}
+			g=${buffer_g[$idx]}
+			b=${buffer_b[$idx]}
+			bmp-rgb "$r" "$g" "$b"
+		done
+		debug "handled row $((y + 1))/$height"
+		bmp-pad "$padding"
+	done
+}
