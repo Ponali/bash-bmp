@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+#
+# Library for showing triangles, with 3-point gradients, and checks for 3D usage.
+# Requires the "buffer" library.
+#
+# Author: Ponali <ponali2k@gmail.com>
+# Date: August 23, 2025
+# License: MIT
 
 tf=$(type -t set_pixel 2>/dev/null || rt=$?)
 if [[ "$tf" != "function" ]]; then

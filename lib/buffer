@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+#
+# Library that can store a buffer of pixels, and optionally a Z-buffer.
+#
+# Author: Ponali <ponali2k@gmail.com>
+# Date: August 23, 2025
+# License: MIT
 
 tf=$(type -t bmp-header 2>/dev/null || rt=$?)
 if [[ "$tf" != "function" ]]; then

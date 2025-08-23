@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+#
+# Frontend that uses the triangle library to draw triangles onto the screen.
+#
+# Author: Ponali <ponali2k@gmail.com>
+# Date: August 23, 2025
+# License: MIT
 
 . ./lib/buffer || exit
 . ./lib/triangles || exit
