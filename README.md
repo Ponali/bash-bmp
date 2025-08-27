@@ -30,6 +30,9 @@ Triangle drawer
 
     ./triangle-drawer -w 64 -h 64 -o out.bmp
 
+3D World
+
+    ./3d-world -w 64 -h 64 -o out.bmp
 
 License
 -------
