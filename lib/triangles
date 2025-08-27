@@ -75,7 +75,7 @@ point_in_triangle() {
     fi
 }
 
- barycentric_coords() {
+barycentric_coords() {
     local px=$1
     local py=$2
     local x1=$3
@@ -122,7 +122,7 @@ draw_triangle() {
 
     # Get triangle properties
     local tri_idx=$((i*3))
-    local tri_idx_end=$((i*3+3))
+    local tri_idx_end=$((tri_idx+3))
     local tri_x_data=("${triangle_x[@]:tri_idx:tri_idx_end}")
     local tri_y_data=("${triangle_y[@]:tri_idx:tri_idx_end}")
     local tri_z_data=("${triangle_z[@]:tri_idx:tri_idx_end}")
@@ -142,6 +142,7 @@ draw_triangle() {
             local b=${tri_c2[$i]}
             local c=${tri_c3[$i]}
             local d=$(( (a*d1+b*d2+c*d3)/unit ))
+            # debug "blend $a,$b,$c x $d1,$d2,$d3 -> $d"
             o+=($d)
         done
 
@@ -160,7 +161,7 @@ draw_triangle() {
             local px=0
             local py=0
             ((px=dx*triangle_unit/dz))
-            ((py=dy*triangle_unit/dz))
+            ((py=-dy*triangle_unit/dz))
             tri_x_proj+=($px)
             tri_y_proj+=($py)
         done
@@ -183,8 +184,9 @@ draw_triangle() {
         tri_y+=($cy)
     done
 
-    debug "converted X $(echo "${tri_x_data[@]}") -> $(echo "${tri_x[@]}")"
-    debug "converted Y $(echo "${tri_y_data[@]}") -> $(echo "${tri_y[@]}")"
+    # I still don't know why there's more data than necessary in "tri_x_data" ONLY on this occasion
+    debug "converted X $(echo "${tri_x_data[@]:0:3}") -> $(echo "${tri_x_proj[@]}") -> $(echo "${tri_x[@]}")"
+    debug "converted Y $(echo "${tri_y_data[@]:0:3}") -> $(echo "${tri_y_proj[@]}") -> $(echo "${tri_y[@]}")"
 
     # Calculate bounding box where the triangle resides.
     local bbx1=$(max 0 $(min3 ${tri_x[@]}))
@@ -193,6 +195,7 @@ draw_triangle() {
     local bby2=$(min $((buffer_height-1)) $(max3 ${tri_y[@]}))
     debug "bounding box: $bbx1,$bby1 $bbx2,$bby2"
 
+    # Draw the triangle from the bounding box.
     local coords
     local z=0
     if [ $triangle_fast_depth -eq 1 ]; then
@@ -202,8 +205,11 @@ draw_triangle() {
     echo >&2
     for ((y = bby1; y <= bby2; y++)); do
         local pxcount=0
+        local drawn=0
         for ((x = bbx1; x <= bbx2; x++)); do
             if [ $(point_in_triangle $x $y "${tri_x[@]}" "${tri_y[@]}") -ne 1 ]; then
+                drawn=1
+
                 if [ $use_zbuffer -eq 1 ] && [ $triangle_fast_depth -eq 0 ]; then
                     coords=($(barycentric_coords $x $y "${tri_x[@]}" "${tri_y[@]}" 65535))
                     z=$(get_triangle_z "${coords[@]}" "${tri_z_data[@]}")
@@ -214,7 +220,8 @@ draw_triangle() {
                     if [ $triangle_debug_rgb -eq 1 ]; then
                         col=($((${coords[0]}/256)) $((${coords[1]}/256)) $((${coords[2]}/256)))
                     elif [ $triangle_debug_zbuf -eq 1 ]; then
-                        local showZ=$((z/1024))
+                        # debug "ZPOS $z"
+                        local showZ=$((z/256))
                         col=($showZ $showZ $showZ)
                     else
                         col=($(blend_color "${coords[@]}"))
@@ -222,9 +229,12 @@ draw_triangle() {
                 fi
                 set_pixel $x $y $z "${col[@]}"
                 ((pxcount++))
+            elif [ $drawn -eq 1 ]; then
+                # There's no point in checking if there are other pixels the triangle resides on, since it's always gonna result false
+                break
             fi
         done
-        echo -ne "\e[F\e[J" >&2
+        echo -ne "\e[F\e[K" >&2
         debug "handled triangle row $y/$bby2 ($pxcount/$((bbx2-bbx1)) px)"
     done
 }

@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+#
+# This uses the "3d-objects" library to draw a 3D world with a rotating cube,
+# a rotating pyramid platform, a floor, and some wall stripes.
+#
+# Author: Ponali <ponali2k@gmail.com>
+# Date: August 27, 2025
+# License: MIT
+
+. ./lib/3d-objects || exit
+
+triangle_unit=65535
+triangle_fast_depth=0
+triangle_debug_rgb=0
+triangle_debug_zbuf=0
+
+background_r=0
+background_g=0
+background_b=0
+
+debug() {
+	echo '[debug]' "$@" >&2
+}
+
+fatal() {
+	echo '[fatal]' "$@" >&2
+	exit 1
+}
+
+render_time=$EPOCHSECONDS
+
+floor_size=100000
+floor_base_y=-28000
+floor_border_y=-24000
+half_floor_size=$((floor_size/2))
+
+stripe_pos=320000
+stripe_width=80000
+stripe_height=500000
+stripe_y=150000
+stripe_z_min=150000
+stripe_z_max=260000
+half_stripe_pos=$((stripe_pos/2))
+
+cube_zpos=13000
+
+make_floor() {
+    add_horizontal_pane_gradient \
+        $floor_size $floor_size \
+        0 $floor_base_y 0 \
+        180 200 240 \
+        180 200 240 \
+        140 140 160 \
+        140 140 160
+
+    add_quad_solid \
+        -$half_floor_size $floor_base_y   $half_floor_size \
+        -$half_floor_size $floor_border_y $half_floor_size \
+        $half_floor_size $floor_border_y $half_floor_size \
+        $half_floor_size $floor_base_y   $half_floor_size \
+        140 200 140
+
+    add_quad_solid \
+        -$half_floor_size $floor_base_y    $half_floor_size \
+        -$half_floor_size $floor_border_y  $half_floor_size \
+        -$half_floor_size $floor_border_y -$half_floor_size \
+        -$half_floor_size $floor_base_y   -$half_floor_size \
+        200 140 140
+
+    add_quad_solid \
+        $half_floor_size $floor_base_y    $half_floor_size \
+        $half_floor_size $floor_border_y  $half_floor_size \
+        $half_floor_size $floor_border_y -$half_floor_size \
+        $half_floor_size $floor_base_y   -$half_floor_size \
+        140 140 200
+}
+
+make_wall_stripes() {
+    add_vertical_z_pane_gradient \
+        $stripe_width $stripe_height \
+        -$half_stripe_pos 0 $stripe_z_min \
+        190 190 255 \
+        190 190 255 \
+        0 0 255 \
+        0 0 255
+
+    add_vertical_x_pane_gradient \
+        $stripe_width $stripe_height \
+        0 0 $stripe_z_max \
+        190 255 190 \
+        190 255 190 \
+        0 255 0 \
+        0 255 0
+
+    add_vertical_z_pane_gradient \
+        $stripe_width $stripe_height \
+        $half_stripe_pos 0 $stripe_z_min \
+        255 190 190 \
+        255 190 190 \
+        255 0 0 \
+        255 0 0
+
+    translate_object 6 \
+        0 $stripe_y 0
+}
+
+make_cube_platform() {
+    add_pyramid \
+        0 -38000 $cube_zpos \
+        30000 -18000 \
+        0 $render_time 0 \
+        255 255 255 \
+        64 192 192 \
+        192 64 64 \
+        64 192 64 \
+        64 64 192
+
+    rotateX_object 6 -1000
+}
+
+make_rotating_cube() {
+    add_cube \
+        0 12000 $cube_zpos \
+        24000 \
+        2500 $(((render_time%86400)*65535/86400)) 0 \
+        0 0 0 \
+        0 255 255 \
+        255 0 0 \
+        0 255 0 \
+        0 0 255 \
+        255 255 255
+}
+
+make-bmp() {
+	local width=$1
+	local height=$2
+
+	init_buffer "$width" "$height"
+	init_zbuffer
+	draw_triangles
+
+    export_buffer
+}
+
+main() {
+	# I'm sorry, but this is just ridiculously slow
+	local width=64
+	local height=64
+	local output=out.bmp
+
+	local OPTIND OPTARG opt
+	while getopts 'w:h:o:t:fdz' opt; do
+		case "$opt" in
+			w) width=$OPTARG;;
+			h) height=$OPTARG;;
+			o) output=$OPTARG;;
+			t) render_time=$OPTARG;;
+			f) triangle_fast_depth=1;;
+			d) triangle_debug_rgb=1;;
+			z) triangle_debug_zbuf=1;;
+			*) fatal 'bad option';;
+		esac
+	done
+
+	make_floor
+	make_wall_stripes
+	make_cube_platform
+	make_rotating_cube
+
+	rotate_scene $((RANDOM%1000-500)) $((RANDOM%1000-500)) 0
+	translate_scene 0 0 80000
+	rotate_scene $((RANDOM%1000-500)) $((RANDOM%1000-500)) 0
+
+	make-bmp "$width" "$height" > "$output" || \
+	    fatal "failed to generate $output"
+
+	echo "generated ${width}x$height image: $output"
+}
+
+main "$@"

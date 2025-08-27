@@ -75,6 +75,8 @@ set_pixel() {
     buffer_r[$idx]=$r
     buffer_g[$idx]=$g
     buffer_b[$idx]=$b
+
+    # echo -ne "\e[$y;$((80+x*2))H\e[48;2;$r;$g;${b}m  \e[0m\e[H" >&2
 }
 
 export_buffer() {
