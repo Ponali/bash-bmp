@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+#
+# Frontend for the "readbmp" library that prints a bitmap image to the terminal
+# using the half-block character.
+#
+# Author: Ponali <ponali2k@gmail.com>
+# Date: September 02, 2025
+# License: MIT
+
+. ./lib/readbmp || exit
+
+debug() {
+	echo '[debug]' "$@" >&2
+}
+
+fatal() {
+	echo '[fatal]' "$@" >&2
+	exit 1
+}
+
+print_half_blocks() {
+    for ((y = 0; y < bitmap_height; y+=2)); do
+        for ((x = 0; x < bitmap_width; x++)); do
+            local color1=($(get_bitmap_pixel $x $y))
+            local color2=($(get_bitmap_pixel $x $((y+1))))
+            printf "\x1b[48;2;${color1[0]};${color1[1]};${color1[2]}m\x1b[38;2;${color2[0]};${color2[1]};${color2[2]}m▄"
+        done
+        echo -e "\x1b[48m" # Newline
+    done
+}
+
+main() {
+    local file=in.bmp
+
+    local OPTIND OPTARG opt
+	while getopts 'i:' opt; do
+		case "$opt" in
+			i) file=$OPTARG;;
+			*) fatal 'bad option';;
+		esac
+    done
+
+    if [ ! -f "$file" ]; then
+        fatal "file not found: $file"
+    fi
+
+    echo -ne "\e[s" # save cursor position
+    read_bmp < "$file"
+    echo -ne "\e[u\e[J" # restore cursor position and remove all debug logs
+
+    print_half_blocks
+}
+
+main "$@"

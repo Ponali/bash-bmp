@@ -1,0 +1,278 @@
+#!/usr/bin/env bash
+#
+# Library that can read and parse BMP image files, and draw them to a buffer.
+#
+# Author: Ponali <ponali2k@gmail.com>
+# Date: September 02, 2025
+# License: MIT
+
+
+# This library only supports BMP files that are left uncompressed (BI_RGB). Bitmaps can be compressed, but this only happens rarely and is left undocumented.
+# 32-bit bitmaps are supported, but the alpha channel isn't. Any external app that uses this library will render these bitmaps fully opaque.
+
+# If you want to convert an image to BMP to use with this library, you can use either FFmpeg or ImageMagick. Other tools have not been tested.
+# You can use whichever you are most used to, but if you would like to use a color format lower than 24-bit, there are some exceptions:
+#
+# For 16-bit color: FFmpeg compresses the image with BI_BITFIELDS (3)
+# For 8-bit color: ImageMagick compresses the image with BI_RLE8 (1)
+# For 4-bit and lower: FFmpeg has no options for these color formats
+
+# This library may be slow at reading bitmaps, due to limitations with how can read binary.
+# It is possible to read binary, but only one byte at a time. There's no way to read multiple bytes at once.
+
+
+# To load a BMP file, run "read_bmp < [filename].bmp".
+# The "bitmap_loaded" variable is 1 if the bitmap has been loaded correctly, or 0 if none has been loaded or an error occured.
+# To draw to the buffer, use "draw_bitmap [x] [y] [width] [height]". This function supports temporarily cropping an image before drawing it, similar to "ctx.drawImage" in DOM JavaScript.
+# To use an image without needing a buffer, use "get_bitmap_pixel [x] [y]" where x=0,y=0 is the top left corner, which returns the red, green, and blue values of the color.
+
+bitmap_loaded=0
+bitmap_color_table_r=()
+bitmap_color_table_g=()
+bitmap_color_table_b=()
+bitmap_data_r=()
+bitmap_data_g=()
+bitmap_data_b=()
+
+# thank you stackoverflow very cool https://stackoverflow.com/a/13890319
+read8() {
+    local _char LANG=C IFS=
+    read -r -d '' -n 1 _char
+    printf %d \'$_char
+}
+
+read16le() {
+    local low=$(read8)
+    local high=$(read8)
+    echo $(( high<<8 | low ))
+}
+
+read32le() {
+    local octet4=$(read8)
+    local octet3=$(read8)
+    local octet2=$(read8)
+    local octet1=$(read8)
+    echo $(( octet1<<24 | octet2<<16 | octet3<<8 | octet4 ))
+}
+
+skip8() {
+    local tmp=$(read8)
+}
+
+skip16() {
+    local tmp=$(read16le)
+}
+
+skip32() {
+    local tmp=$(read32le)
+}
+
+read_color_table() {
+    local colors_used=$1
+    for ((i = 0; i < colors_used; i++)); do
+        bitmap_color_table_b+=($(read8))
+        bitmap_color_table_g+=($(read8))
+        bitmap_color_table_r+=($(read8))
+        skip8
+    done
+}
+
+get_pixel_size() {
+    if [ $bitmap_bpp -eq 32 ]; then
+        echo 4
+    elif [ $bitmap_bpp -eq 24 ]; then
+        echo 3
+    elif [ $bitmap_bpp -eq 16 ]; then
+        echo 2
+    else
+        echo 1
+    fi
+}
+
+add_indexed_pixel() {
+    local index=$1
+    bitmap_data_r+=(${bitmap_color_table_r[$index]})
+    bitmap_data_g+=(${bitmap_color_table_g[$index]})
+    bitmap_data_b+=(${bitmap_color_table_b[$index]})
+}
+
+read_pixel() {
+    if [ $bitmap_bpp -eq 24 ] || [ $bitmap_bpp -eq 32 ]; then
+        bitmap_data_b+=($(read8))
+        bitmap_data_g+=($(read8))
+        bitmap_data_r+=($(read8))
+        if [ $bitmap_bpp -eq 32 ]; then
+            skip8
+        fi
+    elif [ $bitmap_bpp -eq 16 ]; then
+        local octet1=$(read8)
+        local octet2=$(read8)
+        # 5 bits for r, 5 bits for g, 5 bits for b, 1 bit for alpha
+        # RRRRRGGG GGBBBBBA
+        # maybe it's actually 4.4.4.4.0, but i don't know if that's true
+        # TODO: check if 16bpp BMP files work
+        local r=$((octet1>>3))
+        local g=$((octet1&7<<2 | octet2>>6))
+        local b=$((octet2>>1&31))
+        bitmap_data_r+=($((r*255/63)))
+        bitmap_data_g+=($((g*255/63)))
+        bitmap_data_b+=($((b*255/63)))
+    elif [ $bitmap_bpp -eq 8 ]; then
+        add_indexed_pixel $(read8)
+    elif [ $bitmap_bpp -eq 4 ]; then
+        local octet=$(read8)
+        add_indexed_pixel $((octet>>4))
+        add_indexed_pixel $((octet&15))
+    elif [ $bitmap_bpp -eq 2 ]; then
+        local octet=$(read8)
+        add_indexed_pixel $((octet>>6&3))
+        add_indexed_pixel $((octet>>4&3))
+        add_indexed_pixel $((octet>>2&3))
+        add_indexed_pixel $((octet>>0&3))
+    elif [ $bitmap_bpp -eq 1 ]; then
+        local octet=$(read8)
+        add_indexed_pixel $((octet>>7&1))
+        add_indexed_pixel $((octet>>6&1))
+        add_indexed_pixel $((octet>>5&1))
+        add_indexed_pixel $((octet>>4&1))
+        add_indexed_pixel $((octet>>3&1))
+        add_indexed_pixel $((octet>>2&1))
+        add_indexed_pixel $((octet>>1&1))
+        add_indexed_pixel $((octet>>0&1))
+    else
+        fatal "$bitmap_bpp bits per pixel not supported"
+    fi
+}
+
+read_raster_data() {
+    local raster_size=$1
+    local row_size=$((raster_size/bitmap_height))
+    local pixel_size=$(get_pixel_size)
+    local row_data_size=$((bitmap_width*pixel_size))
+    local row_padding_size=$((row_size-row_data_size))
+    local i x y
+    echo >&2
+    for ((y = 0; y < bitmap_height; y++)); do
+        for ((x = 0; x < bitmap_width; x++)); do
+            read_pixel
+        done
+        for ((i = 0; i < row_padding_size; i++)); do
+            skip8
+        done
+        echo -ne "\e[F\e[K" >&2
+        debug "handled row $((y+1))/$bitmap_height"
+    done
+}
+
+read_bmp() {
+    # Header
+    debug "reading bitmap headers"
+    local file_size data_offset colors_used
+    if [ "$(read8)" -ne 66 ] || [ "$(read8)" -ne 77 ]; then # BM
+        fatal "invalid signature"
+    fi
+
+    file_size=$(read32le)
+    skip32 # unused...for some reason
+    data_offset=$(read32le)
+
+    # Info Header
+    # "Bill would be proud." - Muukid
+    skip32 # size of the header. this is always 40. why is this in the file
+    bitmap_width=$(read32le)
+    bitmap_height=$(read32le)
+    skip16 # number of ""planes"". this is always 1. WHY IS THIS IN THE FILE IF IT'S ALWAYS 1. WHAT ARE PANES EVEN FOR??? AREN'T BMP IMAGES ALWAYS OPAQUE??????
+    bitmap_bpp=$(read16le)
+    debug "resolution: ${bitmap_width}x${bitmap_height}x${bitmap_bpp}"
+    bitmap_compression=$(read32le) # why is this 32-bit if there are only 3 ways of storing/compressing the data?? did you expect there to be 4294967296 ways of storing this??????
+    if [ $bitmap_compression -ne 0 ]; then
+        fatal "compression method $bitmap_compression not supported"
+    fi
+    bitmap_image_size=$(read32le)
+    # we're not gonna print the image, so the width and height per unit is getting ignored
+    skip32
+    skip32
+    colors_used=$(read32le)
+    if [ "$bitmap_bpp" -eq "8" ]; then
+        colors_used=256
+    fi
+    debug "palette colors: $colors_used/$((2**bitmap_bpp))"
+    skip32 # this is 2025, every gpu uses true color
+
+    header_bytes=$((14+40+4*colors_used))
+    if [ $bitmap_compression -eq 0 ]; then
+        bitmap_image_size=$((file_size-header_bytes))
+    fi
+
+    # Color table (if necessary)
+    if [ "$colors_used" -gt "0" ]; then
+        debug "reading color table"
+        read_color_table $colors_used
+    fi
+
+
+    # Comply with the data offset thing
+    debug "raster data offset: $((data_offset-header_bytes)) bytes"
+    for ((i = header_bytes; i < data_offset; i++)); do
+        skip8
+    done
+
+    # Raster data
+    debug "reading raster data"
+    read_raster_data $bitmap_image_size
+
+    bitmap_loaded=1
+}
+
+get_bitmap_pixel() {
+    local x=$1
+    local y=$2
+
+    if [ $x -lt 0 ] || [ $x -ge $bitmap_width ] || [ $y -lt 0 ] || [ $y -ge $bitmap_height ]; then
+        echo 0 0 0
+        exit
+    fi
+    local idx=$((x+(bitmap_height-y-1)*bitmap_width))
+
+    echo \
+        ${bitmap_data_r[$idx]} \
+        ${bitmap_data_g[$idx]} \
+        ${bitmap_data_b[$idx]}
+}
+
+min() {
+    local a=$1
+    local b=$2
+
+    echo "$((a < b ? a : b))"
+}
+
+draw_bitmap() {
+    local dest_x=$1
+    local dest_y=$2
+    local dest_width=$3
+    local dest_height=$4
+    local source_x=$5
+    local source_y=$6
+    local source_width=$7
+    local source_height=$8
+    if [ "$#" -le 6 ]; then
+        source_width=$bitmap_width
+        source_height=$bitmap_height
+    fi
+    source_width=$(min $source_width $bitmap_width)
+    source_height=$(min $source_height $bitmap_height)
+
+    local tf=$(type -t set_pixel 2>/dev/null || rt=$?)
+    if [[ "$tf" != "function" ]]; then
+        . ./lib/bitmap || exit
+    fi
+
+    for ((y = 0; y < $(min $dest_height $((source_height-source_y))); y++)); do
+        for ((x = 0; x < $(min $dest_width $((source_width-source_x))); x++)); do
+            local srcx=$((x+source_x))
+            local srcy=$((y+source_y))
+            set_pixel $((x+dest_x)) $((y+dest_y)) $(get_bitmap_pixel $srcx $srcy)
+        done
+    done
+}
