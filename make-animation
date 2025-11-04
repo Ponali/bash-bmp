@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+#
+# Make a gif animation
+#
+# Author: Dave Eddy <dave@daveeddy.com>
+# Date: November 03, 2025
+# License: MIT
+
+mkdir -p output
+for i in {10000..95000..1000}; do
+	f=output/$i.bmp
+	[[ -f $f ]] && continue
+	./3d-world -t "$i" -o "$f"
+done
+
+magick convert \
+	-resize 400% -filter Point \
+	-delay 3 -loop 0 \
+	output/*.bmp output/animation.gif
