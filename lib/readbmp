@@ -42,37 +42,37 @@ read8() {
 }
 
 read16le() {
-    local low=$(read8)
-    local high=$(read8)
+    local low=${ read8; }
+    local high=${ read8; }
     echo $(( high<<8 | low ))
 }
 
 read32le() {
-    local octet4=$(read8)
-    local octet3=$(read8)
-    local octet2=$(read8)
-    local octet1=$(read8)
+    local octet4=${ read8; }
+    local octet3=${ read8; }
+    local octet2=${ read8; }
+    local octet1=${ read8; }
     echo $(( octet1<<24 | octet2<<16 | octet3<<8 | octet4 ))
 }
 
 skip8() {
-    local tmp=$(read8)
+    local tmp=${ read8; }
 }
 
 skip16() {
-    local tmp=$(read16le)
+    local tmp=${ read16le; }
 }
 
 skip32() {
-    local tmp=$(read32le)
+    local tmp=${ read32le; }
 }
 
 read_color_table() {
     local colors_used=$1
     for ((i = 0; i < colors_used; i++)); do
-        bitmap_color_table_b+=($(read8))
-        bitmap_color_table_g+=($(read8))
-        bitmap_color_table_r+=($(read8))
+        bitmap_color_table_b+=(${ read8; })
+        bitmap_color_table_g+=(${ read8; })
+	bitmap_color_table_r+=(${ read8; })
         skip8
     done
 }
@@ -98,15 +98,15 @@ add_indexed_pixel() {
 
 read_pixel() {
     if [ $bitmap_bpp -eq 24 ] || [ $bitmap_bpp -eq 32 ]; then
-        bitmap_data_b+=($(read8))
-        bitmap_data_g+=($(read8))
-        bitmap_data_r+=($(read8))
+        bitmap_data_b+=(${ read8; })
+        bitmap_data_g+=(${ read8; })
+        bitmap_data_r+=(${ read8; })
         if [ $bitmap_bpp -eq 32 ]; then
             skip8
         fi
     elif [ $bitmap_bpp -eq 16 ]; then
-        local octet1=$(read8)
-        local octet2=$(read8)
+        local octet1=${ read8; }
+        local octet2=${ read8; }
         # 5 bits for r, 5 bits for g, 5 bits for b, 1 bit for alpha
         # RRRRRGGG GGBBBBBA
         # maybe it's actually 4.4.4.4.0, but i don't know if that's true
@@ -118,19 +118,19 @@ read_pixel() {
         bitmap_data_g+=($((g*255/63)))
         bitmap_data_b+=($((b*255/63)))
     elif [ $bitmap_bpp -eq 8 ]; then
-        add_indexed_pixel $(read8)
+        add_indexed_pixel ${ read8; }
     elif [ $bitmap_bpp -eq 4 ]; then
-        local octet=$(read8)
+        local octet=${ read8; }
         add_indexed_pixel $((octet>>4))
         add_indexed_pixel $((octet&15))
     elif [ $bitmap_bpp -eq 2 ]; then
-        local octet=$(read8)
+        local octet=${ read8; }
         add_indexed_pixel $((octet>>6&3))
         add_indexed_pixel $((octet>>4&3))
         add_indexed_pixel $((octet>>2&3))
         add_indexed_pixel $((octet>>0&3))
     elif [ $bitmap_bpp -eq 1 ]; then
-        local octet=$(read8)
+        local octet=${ read8; }
         add_indexed_pixel $((octet>>7&1))
         add_indexed_pixel $((octet>>6&1))
         add_indexed_pixel $((octet>>5&1))
@@ -147,7 +147,7 @@ read_pixel() {
 read_raster_data() {
     local raster_size=$1
     local row_size=$((raster_size/bitmap_height))
-    local pixel_size=$(get_pixel_size)
+    local pixel_size=${ get_pixel_size; }
     local row_data_size=$((bitmap_width*pixel_size))
     local row_padding_size=$((row_size-row_data_size))
     local i x y
@@ -168,31 +168,31 @@ read_bmp() {
     # Header
     debug "reading bitmap headers"
     local file_size data_offset colors_used
-    if [ "$(read8)" -ne 66 ] || [ "$(read8)" -ne 77 ]; then # BM
+    if [ "${ read8; }" -ne 66 ] || [ "${ read8; }" -ne 77 ]; then # BM
         fatal "invalid signature"
     fi
 
-    file_size=$(read32le)
+    file_size=${ read32le; }
     skip32 # unused...for some reason
-    data_offset=$(read32le)
+    data_offset=${ read32le; }
 
     # Info Header
     # "Bill would be proud." - Muukid
     skip32 # size of the header. this is always 40. why is this in the file
-    bitmap_width=$(read32le)
-    bitmap_height=$(read32le)
+    bitmap_width=${ read32le; }
+    bitmap_height=${ read32le; }
     skip16 # number of ""planes"". this is always 1. WHY IS THIS IN THE FILE IF IT'S ALWAYS 1. WHAT ARE PANES EVEN FOR??? AREN'T BMP IMAGES ALWAYS OPAQUE??????
-    bitmap_bpp=$(read16le)
+    bitmap_bpp=${ read16le; }
     debug "resolution: ${bitmap_width}x${bitmap_height}x${bitmap_bpp}"
-    bitmap_compression=$(read32le) # why is this 32-bit if there are only 3 ways of storing/compressing the data?? did you expect there to be 4294967296 ways of storing this??????
+    bitmap_compression=${ read32le; } # why is this 32-bit if there are only 3 ways of storing/compressing the data?? did you expect there to be 4294967296 ways of storing this??????
     if [ $bitmap_compression -ne 0 ]; then
         fatal "compression method $bitmap_compression not supported"
     fi
-    bitmap_image_size=$(read32le)
+    bitmap_image_size=${ read32le; }
     # we're not gonna print the image, so the width and height per unit is getting ignored
     skip32
     skip32
-    colors_used=$(read32le)
+    colors_used=${ read32le; }
     if [ "$bitmap_bpp" -eq "8" ]; then
         colors_used=256
     fi
@@ -260,19 +260,21 @@ draw_bitmap() {
         source_width=$bitmap_width
         source_height=$bitmap_height
     fi
-    source_width=$(min $source_width $bitmap_width)
-    source_height=$(min $source_height $bitmap_height)
+    source_width=${ min $source_width $bitmap_width ;}
+    source_height=${ min $source_height $bitmap_height ;}
 
     local tf=$(type -t set_pixel 2>/dev/null || rt=$?)
     if [[ "$tf" != "function" ]]; then
         . ./lib/bitmap || exit
     fi
 
-    for ((y = 0; y < $(min $dest_height $((source_height-source_y))); y++)); do
-        for ((x = 0; x < $(min $dest_width $((source_width-source_x))); x++)); do
+    local ymax=$(min $dest_height $((source_height-source_y)))
+    local xmax=$(min $dest_width $((source_width-source_x)))
+    for ((y = 0; y < ymax; y++)); do
+        for ((x = 0; x < xmax; x++)); do
             local srcx=$((x+source_x))
             local srcy=$((y+source_y))
-            set_pixel $((x+dest_x)) $((y+dest_y)) $(get_bitmap_pixel $srcx $srcy)
+            set_pixel $((x+dest_x)) $((y+dest_y)) ${ get_bitmap_pixel $srcx $srcy; }
         done
     done
 }

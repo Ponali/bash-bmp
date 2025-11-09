@@ -244,7 +244,7 @@ sine_table=(32768 32969 33170 33371 33572 33774 33975 34176 34377 34578 34779 34
 sin() {
     local angle=$1
     ((angle=angle*1024/65536))
-    angle=$(euclidean_mod $angle 1024)
+    angle=${ euclidean_mod $angle 1024; }
 
     echo $((${sine_table[$angle]}-32768))
 }
@@ -252,7 +252,7 @@ sin() {
 # works like sin except im lazy
 cos() {
     local angle=$1
-    echo $(sin $((angle+16384)))
+    sin $((angle+16384))
 }
 
 # i'm not implementing tan since i won't be using it anyway and i don't wanna think about how i could implement infinity
@@ -287,8 +287,8 @@ rotate2D() {
         return
     fi
 
-    local s=$(sin $angle)
-    local c=$(cos $angle)
+    local s=${ sin $angle; }
+    local c=${ cos $angle; }
     local nx=$(( ((c*ox)+(s*oy))/32767 ))
     local ny=$(( ((c*oy)-(s*ox))/32767 ))
 
@@ -303,7 +303,7 @@ rotateX() {
     local z=$3
     local angle=$4
 
-    local o=($(rotate2D $y $z $angle))
+    local o=(${ rotate2D $y $z $angle; })
 
     echo $x "${o[0]}" "${o[1]}"
 }
@@ -316,7 +316,7 @@ rotateY() {
     local z=$3
     local angle=$4
 
-    local o=($(rotate2D $x $z $angle))
+    local o=(${ rotate2D $x $z $angle; })
 
     echo "${o[0]}" $y "${o[1]}"
 }
@@ -329,7 +329,7 @@ rotateZ() {
     local z=$3
     local angle=$4
 
-    local o=($(rotate2D $x $y $angle))
+    local o=(${ rotate2D $x $y $angle; })
 
     echo "${o[0]}" "${o[1]}" $z
 }
@@ -345,7 +345,7 @@ rotate() {
     local az=$6
 
     # debug "r3d $ax,$ay,$az"
-    rotateZ $(rotateY $(rotateX $px $py $pz $ax) $ay) $az
+    rotateZ ${ rotateY ${ rotateX $px $py $pz $ax; } $ay; } $az
 }
 
 # Object transformation
@@ -373,7 +373,7 @@ translate_object() {
         local oy=${triangle_y[$i]}
         local oz=${triangle_z[$i]}
 
-        local np=($(translate $ox $oy $oz $tx $ty $tz))
+	local np=( ${ translate $ox $oy $oz $tx $ty $tz;} )
 
         triangle_x[$i]=${np[0]}
         triangle_y[$i]=${np[1]}
@@ -394,7 +394,7 @@ rotateX_object() {
         local oy=${triangle_y[$i]}
         local oz=${triangle_z[$i]}
 
-        local np=($(rotateX $ox $oy $oz $angle))
+        local np=(${ rotateX $ox $oy $oz $angle; })
 
         triangle_x[$i]=${np[0]}
         triangle_y[$i]=${np[1]}
@@ -415,7 +415,7 @@ rotateY_object() {
         local oy=${triangle_y[$i]}
         local oz=${triangle_z[$i]}
 
-        local np=($(rotateY $ox $oy $oz $angle))
+        local np=(${ rotateY $ox $oy $oz $angle; })
 
         triangle_x[$i]=${np[0]}
         triangle_y[$i]=${np[1]}
@@ -436,7 +436,7 @@ rotateZ_object() {
         local oy=${triangle_y[$i]}
         local oz=${triangle_z[$i]}
 
-        local np=($(rotateZ $ox $oy $oz $angle))
+        local np=(${ rotateZ $ox $oy $oz $angle; })
 
         triangle_x[$i]=${np[0]}
         triangle_y[$i]=${np[1]}
@@ -459,7 +459,7 @@ rotate_object() {
         local oy=${triangle_y[$i]}
         local oz=${triangle_z[$i]}
 
-        local np=($(rotate $ox $oy $oz $ax $ay $az))
+        local np=(${ rotate $ox $oy $oz $ax $ay $az; })
 
         triangle_x[$i]=${np[0]}
         triangle_y[$i]=${np[1]}
@@ -485,7 +485,7 @@ translate_scene() {
         local oy=${triangle_y[$i]}
         local oz=${triangle_z[$i]}
 
-        local np=($(translate $ox $oy $oz $tx $ty $tz))
+        local np=(${ translate $ox $oy $oz $tx $ty $tz; })
 
         triangle_x[$i]=${np[0]}
         triangle_y[$i]=${np[1]}
@@ -507,7 +507,7 @@ rotateX_scene() {
         local oy=${triangle_y[$i]}
         local oz=${triangle_z[$i]}
 
-        local np=($(rotateX $ox $oy $oz $angle))
+        local np=(${ rotateX $ox $oy $oz $angle; })
 
         triangle_x[$i]=${np[0]}
         triangle_y[$i]=${np[1]}
@@ -529,7 +529,7 @@ rotateY_scene() {
         local oy=${triangle_y[$i]}
         local oz=${triangle_z[$i]}
 
-        local np=($(rotateY $ox $oy $oz $angle))
+        local np=(${ rotateY $ox $oy $oz $angle; })
 
         triangle_x[$i]=${np[0]}
         triangle_y[$i]=${np[1]}
@@ -551,7 +551,7 @@ rotateZ_scene() {
         local oy=${triangle_y[$i]}
         local oz=${triangle_z[$i]}
 
-        local np=($(rotateZ $ox $oy $oz $angle))
+        local np=(${ rotateZ $ox $oy $oz $angle; })
 
         triangle_x[$i]=${np[0]}
         triangle_y[$i]=${np[1]}
@@ -575,7 +575,7 @@ rotate_scene() {
         local oy=${triangle_y[$i]}
         local oz=${triangle_z[$i]}
 
-        local np=($(rotate $ox $oy $oz $ax $ay $az))
+        local np=(${ rotate $ox $oy $oz $ax $ay $az; })
 
         triangle_x[$i]=${np[0]}
         triangle_y[$i]=${np[1]}
@@ -601,10 +601,10 @@ add_horizontal_pane() {
     local halfheight=$((height/2))
 
     add_quad_solid \
-        $(translate -$halfwidth 0 -$halfheight $centerX $centerY $centerZ) \
-        $(translate  $halfwidth 0 -$halfheight $centerX $centerY $centerZ) \
-        $(translate  $halfwidth 0  $halfheight $centerX $centerY $centerZ) \
-        $(translate -$halfwidth 0  $halfheight $centerX $centerY $centerZ) \
+        ${ translate -$halfwidth 0 -$halfheight $centerX $centerY $centerZ; } \
+        ${ translate  $halfwidth 0 -$halfheight $centerX $centerY $centerZ; } \
+        ${ translate  $halfwidth 0  $halfheight $centerX $centerY $centerZ; } \
+        ${ translate -$halfwidth 0  $halfheight $centerX $centerY $centerZ; } \
         $r $g $b
 }
 
@@ -673,10 +673,10 @@ add_rotatable_pane() {
     local halfheight=$((height/2))
 
     add_quad_solid \
-        $(translate $(rotate -$halfwidth 0 -$halfheight $angle1 $angle2 $angle3) $centerX $centerY $centerZ) \
-        $(translate $(rotate $halfwidth 0 -$halfheight $angle1 $angle2 $angle3) $centerX $centerY $centerZ) \
-        $(translate $(rotate $halfwidth 0 $halfheight $angle1 $angle2 $angle3) $centerX $centerY $centerZ) \
-        $(translate $(rotate -$halfwidth 0 $halfheight $angle1 $angle2 $angle3) $centerX $centerY $centerZ) \
+        ${ translate ${ rotate -$halfwidth 0 -$halfheight $angle1 $angle2 $angle3; } $centerX $centerY $centerZ; } \
+        ${ translate ${ rotate $halfwidth 0 -$halfheight $angle1 $angle2 $angle3; } $centerX $centerY $centerZ; } \
+        ${ translate ${ rotate $halfwidth 0 $halfheight $angle1 $angle2 $angle3; } $centerX $centerY $centerZ; } \
+        ${ translate ${ rotate -$halfwidth 0 $halfheight $angle1 $angle2 $angle3; } $centerX $centerY $centerZ; } \
         $r $g $b
 }
 
@@ -706,10 +706,10 @@ add_horizontal_pane_gradient() {
     local halfheight=$((height/2))
 
     add_quad_gradient \
-        $(translate -$halfwidth 0 -$halfheight $centerX $centerY $centerZ) \
-        $(translate  $halfwidth 0 -$halfheight $centerX $centerY $centerZ) \
-        $(translate  $halfwidth 0  $halfheight $centerX $centerY $centerZ) \
-        $(translate -$halfwidth 0  $halfheight $centerX $centerY $centerZ) \
+        ${ translate -$halfwidth 0 -$halfheight $centerX $centerY $centerZ; } \
+        ${ translate  $halfwidth 0 -$halfheight $centerX $centerY $centerZ; } \
+        ${ translate  $halfwidth 0  $halfheight $centerX $centerY $centerZ; } \
+        ${ translate -$halfwidth 0  $halfheight $centerX $centerY $centerZ; } \
         $r1 $g1 $b1 \
         $r2 $g2 $b2 \
         $r4 $g4 $b4 \
@@ -817,10 +817,10 @@ add_rotatable_pane_gradient() {
     local halfheight=$((height/2))
 
     add_quad_gradient \
-        $(translate $(rotate -$halfwidth 0 -$halfheight $angle1 $angle2 $angle3) $centerX $centerY $centerZ) \
-        $(translate $(rotate $halfwidth 0 -$halfheight $angle1 $angle2 $angle3) $centerX $centerY $centerZ) \
-        $(translate $(rotate $halfwidth 0 $halfheight $angle1 $angle2 $angle3) $centerX $centerY $centerZ) \
-        $(translate $(rotate -$halfwidth 0 $halfheight $angle1 $angle2 $angle3) $centerX $centerY $centerZ) \
+        ${ translate ${ rotate -$halfwidth 0 -$halfheight $angle1 $angle2 $angle3; } $centerX $centerY $centerZ; } \
+        ${ translate ${ rotate $halfwidth 0 -$halfheight $angle1 $angle2 $angle3; } $centerX $centerY $centerZ; } \
+        ${ translate ${ rotate $halfwidth 0 $halfheight $angle1 $angle2 $angle3; } $centerX $centerY $centerZ; } \
+        ${ translate ${ rotate -$halfwidth 0 $halfheight $angle1 $angle2 $angle3; } $centerX $centerY $centerZ; } \
         $r1 $g1 $b1 \
         $r2 $g2 $b2 \
         $r4 $g4 $b4 \
@@ -850,50 +850,50 @@ add_cube() {
 
     # Bottom face
     add_quad_solid \
-        $(translate $(rotate  $size -$size  $size $angle1 $angle2 $angle3) $x $y $z) \
-        $(translate $(rotate -$size -$size  $size $angle1 $angle2 $angle3) $x $y $z) \
-        $(translate $(rotate -$size -$size -$size $angle1 $angle2 $angle3) $x $y $z) \
-        $(translate $(rotate  $size -$size -$size $angle1 $angle2 $angle3) $x $y $z) \
+        ${ translate ${ rotate  $size -$size  $size $angle1 $angle2 $angle3;} $x $y $z;} \
+        ${ translate ${ rotate -$size -$size  $size $angle1 $angle2 $angle3;} $x $y $z;} \
+        ${ translate ${ rotate -$size -$size -$size $angle1 $angle2 $angle3;} $x $y $z;} \
+        ${ translate ${ rotate  $size -$size -$size $angle1 $angle2 $angle3;} $x $y $z;} \
         ${r[0]} ${g[0]} ${b[0]}
 
     # Positive X axis face
     add_quad_solid \
-        $(translate $(rotate  $size  $size  $size $angle1 $angle2 $angle3) $x $y $z) \
-        $(translate $(rotate -$size  $size  $size $angle1 $angle2 $angle3) $x $y $z) \
-        $(translate $(rotate -$size -$size  $size $angle1 $angle2 $angle3) $x $y $z) \
-        $(translate $(rotate  $size -$size  $size $angle1 $angle2 $angle3) $x $y $z) \
+        ${ translate ${ rotate  $size  $size  $size $angle1 $angle2 $angle3;} $x $y $z;} \
+        ${ translate ${ rotate -$size  $size  $size $angle1 $angle2 $angle3;} $x $y $z;} \
+        ${ translate ${ rotate -$size -$size  $size $angle1 $angle2 $angle3;} $x $y $z;} \
+        ${ translate ${ rotate  $size -$size  $size $angle1 $angle2 $angle3;} $x $y $z;} \
         ${r[1]} ${g[1]} ${b[1]}
 
     # Positive Z axis face
     add_quad_solid \
-        $(translate $(rotate  $size  $size  $size $angle1 $angle2 $angle3) $x $y $z) \
-        $(translate $(rotate  $size  $size -$size $angle1 $angle2 $angle3) $x $y $z) \
-        $(translate $(rotate  $size -$size -$size $angle1 $angle2 $angle3) $x $y $z) \
-        $(translate $(rotate  $size -$size  $size $angle1 $angle2 $angle3) $x $y $z) \
+        ${ translate ${ rotate  $size  $size  $size $angle1 $angle2 $angle3;} $x $y $z;} \
+        ${ translate ${ rotate  $size  $size -$size $angle1 $angle2 $angle3;} $x $y $z;} \
+        ${ translate ${ rotate  $size -$size -$size $angle1 $angle2 $angle3;} $x $y $z;} \
+        ${ translate ${ rotate  $size -$size  $size $angle1 $angle2 $angle3;} $x $y $z;} \
         ${r[2]} ${g[2]} ${b[2]}
 
     # Negative X axis face
     add_quad_solid \
-        $(translate $(rotate  $size  $size -$size $angle1 $angle2 $angle3) $x $y $z) \
-        $(translate $(rotate -$size  $size -$size $angle1 $angle2 $angle3) $x $y $z) \
-        $(translate $(rotate -$size -$size -$size $angle1 $angle2 $angle3) $x $y $z) \
-        $(translate $(rotate  $size -$size -$size $angle1 $angle2 $angle3) $x $y $z) \
+        ${ translate ${ rotate  $size  $size -$size $angle1 $angle2 $angle3;} $x $y $z;} \
+        ${ translate ${ rotate -$size  $size -$size $angle1 $angle2 $angle3;} $x $y $z;} \
+        ${ translate ${ rotate -$size -$size -$size $angle1 $angle2 $angle3;} $x $y $z;} \
+        ${ translate ${ rotate  $size -$size -$size $angle1 $angle2 $angle3;} $x $y $z;} \
         ${r[3]} ${g[3]} ${b[3]}
 
     # Negative Z axis face
     add_quad_solid \
-        $(translate $(rotate -$size  $size  $size $angle1 $angle2 $angle3) $x $y $z) \
-        $(translate $(rotate -$size  $size -$size $angle1 $angle2 $angle3) $x $y $z) \
-        $(translate $(rotate -$size -$size -$size $angle1 $angle2 $angle3) $x $y $z) \
-        $(translate $(rotate -$size -$size  $size $angle1 $angle2 $angle3) $x $y $z) \
+        ${ translate ${ rotate -$size  $size  $size $angle1 $angle2 $angle3;} $x $y $z;} \
+        ${ translate ${ rotate -$size  $size -$size $angle1 $angle2 $angle3;} $x $y $z;} \
+        ${ translate ${ rotate -$size -$size -$size $angle1 $angle2 $angle3;} $x $y $z;} \
+        ${ translate ${ rotate -$size -$size  $size $angle1 $angle2 $angle3;} $x $y $z;} \
         ${r[4]} ${g[4]} ${b[4]}
 
     # Top face
     add_quad_solid \
-        $(translate $(rotate  $size  $size  $size $angle1 $angle2 $angle3) $x $y $z) \
-        $(translate $(rotate -$size  $size  $size $angle1 $angle2 $angle3) $x $y $z) \
-        $(translate $(rotate -$size  $size -$size $angle1 $angle2 $angle3) $x $y $z) \
-        $(translate $(rotate  $size  $size -$size $angle1 $angle2 $angle3) $x $y $z) \
+        ${ translate ${ rotate  $size  $size  $size $angle1 $angle2 $angle3;} $x $y $z;} \
+        ${ translate ${ rotate -$size  $size  $size $angle1 $angle2 $angle3;} $x $y $z;} \
+        ${ translate ${ rotate -$size  $size -$size $angle1 $angle2 $angle3;} $x $y $z;} \
+        ${ translate ${ rotate  $size  $size -$size $angle1 $angle2 $angle3;} $x $y $z;} \
         ${r[5]} ${g[5]} ${b[5]}
 }
 
@@ -945,10 +945,10 @@ add_tetrahedron() {
     done
 
     # Define points
-    local bp1="$(translate $(rotate -$width -$height -$width $angle1 $angle2 $angle3) $x $y $z)" # Bottom point #1
-    local bp2="$(translate $(rotate  $width -$height -$width $angle1 $angle2 $angle3) $x $y $z)" # Bottom point #2
-    local bp3="$(translate $(rotate  0      -$height  $width $angle1 $angle2 $angle3) $x $y $z)" # Bottom point #3
-    local tp="$(translate $(rotate   0       $height  0      $angle1 $angle2 $angle3) $x $y $z)" # Top point
+    local bp1="${ translate ${ rotate -$width -$height -$width $angle1 $angle2 $angle3;} $x $y $z; }" # Bottom point #1
+    local bp2="${ translate ${ rotate  $width -$height -$width $angle1 $angle2 $angle3;} $x $y $z; }" # Bottom point #2
+    local bp3="${ translate ${ rotate  0      -$height  $width $angle1 $angle2 $angle3;} $x $y $z; }" # Bottom point #3
+    local tp="${ translate ${ rotate   0       $height  0      $angle1 $angle2 $angle3;} $x $y $z; }" # Top point
 
     # Add triangles
     add_triangle_solid $bp1 $bp2 $bp3 ${r[0]} ${g[0]} ${b[0]} # Bottom face
@@ -1006,11 +1006,11 @@ add_pyramid() {
     done
 
     # Define points
-    local bp1="$(translate $(rotate -$width -$height -$width $angle1 $angle2 $angle3) $x $y $z)" # Bottom point #1
-    local bp2="$(translate $(rotate  $width -$height -$width $angle1 $angle2 $angle3) $x $y $z)" # Bottom point #2
-    local bp3="$(translate $(rotate  $width -$height  $width $angle1 $angle2 $angle3) $x $y $z)" # Bottom point #3
-    local bp4="$(translate $(rotate -$width -$height  $width $angle1 $angle2 $angle3) $x $y $z)" # Bottom point #4
-    local tp="$(translate $(rotate   0       $height  0      $angle1 $angle2 $angle3) $x $y $z)" # Top point
+    local bp1="${ translate ${ rotate -$width -$height -$width $angle1 $angle2 $angle3; } $x $y $z ;}" # Bottom point #1
+    local bp2="${ translate ${ rotate  $width -$height -$width $angle1 $angle2 $angle3; } $x $y $z ;}" # Bottom point #2
+    local bp3="${ translate ${ rotate  $width -$height  $width $angle1 $angle2 $angle3; } $x $y $z ;}" # Bottom point #3
+    local bp4="${ translate ${ rotate -$width -$height  $width $angle1 $angle2 $angle3; } $x $y $z ;}" # Bottom point #4
+    local tp="${  translate ${ rotate  0       $height  0      $angle1 $angle2 $angle3; } $x $y $z ;}" # Top point
 
     # Add triangles
     add_quad_solid $bp1 $bp2 $bp3 $bp4 ${r[0]} ${g[0]} ${b[0]} # Bottom face

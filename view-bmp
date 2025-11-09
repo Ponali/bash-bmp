@@ -21,11 +21,12 @@ fatal() {
 print_half_blocks() {
     for ((y = 0; y < bitmap_height; y+=2)); do
         for ((x = 0; x < bitmap_width; x++)); do
-            local color1=($(get_bitmap_pixel $x $y))
-            local color2=($(get_bitmap_pixel $x $((y+1))))
+            local color1=( ${ get_bitmap_pixel $x $y; } )
+            local color2=( ${ get_bitmap_pixel $x $((y+1)); } )
             printf "\x1b[48;2;${color1[0]};${color1[1]};${color1[2]}m\x1b[38;2;${color2[0]};${color2[1]};${color2[2]}m▄"
         done
-        echo -e "\x1b[48m" # Newline
+        #echo -e "\x1b[48m" # Newline
+        echo -e "\x1b[0m" # Newline
     done
 }
 
@@ -49,6 +50,8 @@ main() {
     echo -ne "\e[u\e[J" # restore cursor position and remove all debug logs
 
     print_half_blocks
+
+    echo -ne "\e[0m"
 }
 
 main "$@"
